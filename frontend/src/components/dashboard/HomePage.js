@@ -4,7 +4,7 @@ import { auth, db } from '../../firebase';
 import { signOut, onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
 import { collection, addDoc, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import { Navbar, Container, Nav, Button, Form, Card, Row, Col, ProgressBar, Spinner, Alert, InputGroup } from 'react-bootstrap';
+import { Navbar, Container, Nav, Button, Form, Card, Row, Col, ProgressBar, Spinner, Alert } from 'react-bootstrap';
 
 // আপনার Cloudinary ক্রেডেনশিয়ালগুলো এখানে দিন
 const CLOUDINARY_UPLOAD_PRESET = 'filesify_uploads'; // আপনার Cloudinary প্রিসেট
