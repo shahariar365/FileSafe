@@ -1,12 +1,10 @@
-// frontend/src/components/dashboard/HomePage.js
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../../firebase';
 import { signOut, onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
 import { collection, addDoc, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import { Navbar, Container, Nav, Button, Form, Card, Row, Col, ProgressBar, Spinner, Alert } from 'react-bootstrap';
+import { Navbar, Container, Nav, Button, Form, Card, Row, Col, ProgressBar, Spinner, Alert, InputGroup } from 'react-bootstrap';
 
 // আপনার Cloudinary ক্রেডেনশিয়ালগুলো এখানে দিন
 const CLOUDINARY_UPLOAD_PRESET = 'filesify_uploads'; // আপনার Cloudinary প্রিসেট
@@ -17,7 +15,7 @@ const HomePage = () => {
     const [loading, setLoading] = useState(true);
     const [files, setFiles] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null);
-    const [uploadProgress, setUploadProgress] = useState(0);
+    const [fileName, setFileName] = useState(''); // ফাইলের কাস্টম নামের জন্য স্টেট
     const [isUploading, setIsUploading] = useState(false);
     const navigate = useNavigate();
 
@@ -33,21 +31,51 @@ const HomePage = () => {
         return () => unsubscribe();
     }, [navigate]);
 
-    useEffect(() => {
-        if (!user) return;
-        const q = query(collection(db, "files"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setFiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-        return () => unsubscribe();
-    }, [user]);
+useEffect(() => {
+    // যদি user অবজেক্ট না থাকে, তাহলে কিছুই করো না
+    if (!user) {
+        console.log("useEffect for files: No user found, returning.");
+        return;
+    }
 
-    const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
+    console.log(`useEffect for files: Found user, creating query for userId: ${user.uid}`);
+
+    const q = query(collection(db, "files"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
+    
+    const unsubscribe = onSnapshot(q, 
+        (querySnapshot) => {
+            const userFiles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            console.log(`Firestore responded with ${userFiles.length} files.`);
+            console.log("Files data:", userFiles);
+            
+            setFiles(userFiles);
+        },
+        (error) => {
+            // যদি ডেটাবেস থেকে ডেটা আনতে কোনো এরর হয়
+            console.error("Error fetching files from Firestore: ", error);
+            toast.error("Could not load your files. Please try again.");
+        }
+    );
+
+    return () => {
+        console.log("Unsubscribing from Firestore listener.");
+        unsubscribe();
+    };
+}, [user]);
+
+    const handleFileChange = (e) => {
+        if (e.target.files[0]) {
+            setSelectedFile(e.target.files[0]);
+        }
+    };
 
     const handleUpload = async () => {
-        if (!selectedFile || !user) return;
+        if (!selectedFile || !user) {
+            toast.warn("Please select a file first.");
+            return;
+        }
         setIsUploading(true);
-        setUploadProgress(0);
 
         const formData = new FormData();
         formData.append('file', selectedFile);
@@ -58,9 +86,12 @@ const HomePage = () => {
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
 
+            // Firestore-এ সঠিক তথ্যসহ ডেটা সেভ করা
             await addDoc(collection(db, "files"), {
-                userId: user.uid, name: selectedFile.name, url: data.secure_url,
-                type: data.resource_type === 'raw' ? selectedFile.type : data.resource_type,
+                userId: user.uid, // <--- নিশ্চিত করা হচ্ছে যে userId সেভ হচ্ছে
+                name: fileName || selectedFile.name, // <--- কাস্টম নাম অথবা আসল নাম
+                url: data.secure_url,
+                type: selectedFile.type, // <-- আসল ফাইলের টাইপ সেভ করা
                 createdAt: new Date(),
             });
             toast.success('File uploaded successfully!');
@@ -69,12 +100,14 @@ const HomePage = () => {
         } finally {
             setIsUploading(false);
             setSelectedFile(null);
+            setFileName(''); // কাস্টম নাম রিসেট করা
             if(document.getElementById('file-input')) {
                 document.getElementById('file-input').value = null;
             }
         }
     };
     
+    // ... handleLogout এবং handleResendVerification ফাংশন আগের মতোই থাকবে ...
     const handleLogout = async () => {
         await signOut(auth);
         toast.info("You have been logged out.");
@@ -89,52 +122,59 @@ const HomePage = () => {
         }
     };
 
+    // ... লোডিং এবং ইমেইল ভেরিফিকেশন স্ক্রিন আগের মতোই থাকবে ...
     if (loading) {
-        return (
-            <div className="d-flex justify-content-center align-items-center min-vh-100">
-                <Spinner animation="border" variant="primary" style={{ width: '3rem', height: '3rem' }} />
-            </div>
-        );
+        return <div className="d-flex justify-content-center align-items-center min-vh-100"><Spinner animation="border" variant="primary" /></div>;
     }
-    
     if (user && !user.emailVerified) {
         return (
             <Container className="d-flex flex-column justify-content-center align-items-center min-vh-100">
-                <Card className="text-center p-4 shadow-lg">
-                    <Card.Body>
-                        <Card.Title as="h2" className="mb-3">Verify Your Email</Card.Title>
-                        <Card.Text>A verification link was sent to <strong>{user.email}</strong>.</Card.Text>
-                        <Card.Text>Please check your inbox to activate your account.</Card.Text>
-                        <Button variant="primary" onClick={handleResendVerification} className="m-2">Resend Email</Button>
-                        <Button variant="outline-danger" onClick={handleLogout} className="m-2">Logout</Button>
-                    </Card.Body>
-                </Card>
+                <Card className="text-center p-4 shadow-lg"><Card.Body><Card.Title as="h2" className="mb-3">Verify Your Email</Card.Title><Card.Text>A verification link was sent to <strong>{user.email}</strong>.</Card.Text><Card.Text>Please check your inbox to activate your account.</Card.Text><Button variant="primary" onClick={handleResendVerification} className="m-2">Resend Email</Button><Button variant="outline-danger" onClick={handleLogout} className="m-2">Logout</Button></Card.Body></Card>
             </Container>
         );
     }
+    
+    // ফাইল কার্ডের জন্য একটি Helper কম্পোনেন্ট
+    const FilePreview = ({ file }) => {
+        if (file.type.startsWith('image')) {
+            return <Card.Img variant="top" src={file.url} style={{ height: '200px', objectFit: 'cover' }} />;
+        }
+        if (file.type.startsWith('video')) {
+            return <video src={file.url} style={{ width: '100%', height: '200px', objectFit: 'cover' }} controls />;
+        }
+        if (file.type.includes('pdf')) {
+            // PDF আইকন
+            return <div className="d-flex align-items-center justify-content-center" style={{ height: '200px', backgroundColor: '#e9ecef' }}><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="#D93025" className="bi bi-file-earmark-pdf-fill" viewBox="0 0 16 16"><path d="M5.523 12.424q.21-.164.455-.164.247 0 .45.164.205.164.317.437h.45a.532.532 0 0 0 .532-.532V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.375a.5.5 0 0 0 .5.5h.5v1.275a.5.5 0 0 0-.5.5h-1a.5.5 0 0 0-.5.5v1.a.5.5 0 0 0 .5.5h.5a.5.5 0 0 0 .5-.5V8.5h-1a.5.5 0 0 0-.5.5v1.125a.5.5 0 0 0 .5.5h.5v.918a.554.554 0 0 0 .554.554h.188a.554.554 0 0 0 .554-.554V11.5a.5.5 0 0 0-.5-.5h-.5v-1.275a.5.5 0 0 0 .5-.5h1a.5.5 0 0 0 .5.5v1.836a.532.532 0 0 0-.532.532h-.45a.554.554 0 0 0-.11-.193.437.437 0 0 0-.244-.135.437.437 0 0 0-.244.135q-.157.126-.157.377a.45.45 0 0 0 .157.377q.149.125.368.125.22 0 .368-.125.149-.126.149-.377h.45a.532.532 0 0 0 .532-.532V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.375a.5.5 0 0 0 .5.5h.5v1.275a.5.5 0 0 0-.5.5h-1a.5.5 0 0 0-.5.5v1.a.5.5 0 0 0 .5.5h.5a.5.5 0 0 0 .5-.5V8.5h-1a.5.5 0 0 0-.5.5v1.125a.5.5 0 0 0 .5.5h.5v.918a.554.554 0 0 0 .554.554h.188a.554.554 0 0 0 .554-.554V11.5a.5.5 0 0 0-.5-.5h-.5v-1.275a.5.5 0 0 0 .5-.5h1a.5.5 0 0 0 .5.5v1.836a.532.532 0 0 0-.532.532z"/><path d="M9.293 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.707A1 1 0 0 0 13.707 4L10 .293A1 1 0 0 0 9.293 0M9.5 3.5v-2l3 3h-2a1 1 0 0 1-1-1"/></svg></div>;
+        }
+        // জেনেরিক ফাইল আইকন
+        return <div className="d-flex align-items-center justify-content-center" style={{ height: '200px', backgroundColor: '#e9ecef' }}><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" className="bi bi-file-earmark-text text-secondary" viewBox="0 0 16 16"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zM5 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5z"/><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5L9.5 0zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/></svg></div>;
+    };
 
     return (
         <>
             <Navbar bg="primary" variant="dark" expand="lg" sticky="top">
                 <Container>
                     <Navbar.Brand href="#home" className="fw-bold">FileSafe</Navbar.Brand>
-                    <Navbar.Toggle aria-controls="basic-navbar-nav" />
-                    <Navbar.Collapse id="basic-navbar-nav">
-                        <Nav className="ms-auto">
-                            {user && <Navbar.Text className="me-3">Signed in as: {user.email}</Navbar.Text>}
-                            <Button variant="outline-light" onClick={handleLogout}>Logout</Button>
-                        </Nav>
-                    </Navbar.Collapse>
+                    <Nav className="ms-auto">
+                        {user && <Navbar.Text className="me-3 d-none d-lg-block">Signed in as: {user.email}</Navbar.Text>}
+                        <Button variant="outline-light" onClick={handleLogout}>Logout</Button>
+                    </Nav>
                 </Container>
             </Navbar>
 
             <Container className="my-5">
                 <Card className="p-4 mb-5 shadow-sm border-0">
                     <h2 className="mb-4">Upload New File</h2>
+                    {/* কাস্টম ফাইলের নাম দেওয়ার ইনপুট */}
+                    <Form.Group className="mb-3">
+                        <Form.Label>Custom File Name (Optional)</Form.Label>
+                        <Form.Control type="text" placeholder="e.g., My Report" value={fileName} onChange={(e) => setFileName(e.target.value)} />
+                    </Form.Group>
+                    {/* ফাইল সিলেক্ট করার ইনপুট */}
                     <Form.Group controlId="file-input" className="mb-3">
                         <Form.Control type="file" onChange={handleFileChange} />
                     </Form.Group>
-                    {isUploading && <ProgressBar animated now={uploadProgress} label={`${Math.round(uploadProgress)}%`} className="mb-3" />}
+                    {isUploading && <ProgressBar animated now={isUploading ? 100 : 0} className="mb-3" />}
                     <Button onClick={handleUpload} disabled={!selectedFile || isUploading} size="lg">
                         {isUploading ? 'Uploading...' : 'Upload File'}
                     </Button>
@@ -147,13 +187,7 @@ const HomePage = () => {
                         <Col key={file.id}>
                             <Card className="h-100 shadow-sm border-0 card-hover">
                                 <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-decoration-none text-dark">
-                                    {file.type.startsWith('image') ? (
-                                        <Card.Img variant="top" src={file.url} style={{ height: '200px', objectFit: 'cover' }} />
-                                    ) : (
-                                        <div className="d-flex align-items-center justify-content-center" style={{ height: '200px', backgroundColor: '#e9ecef' }}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" className="bi bi-file-earmark-text text-secondary" viewBox="0 0 16 16"><path d="M5.5 7a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zM5 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5z"/><path d="M9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5L9.5 0zm0 1v2A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/></svg>
-                                        </div>
-                                    )}
+                                    <FilePreview file={file} />
                                     <Card.Body>
                                         <Card.Title className="text-truncate" title={file.name}>{file.name}</Card.Title>
                                         <Card.Text className="text-muted small">
@@ -173,5 +207,4 @@ const HomePage = () => {
         </>
     );
 };
-
 export default HomePage;
