@@ -1,5 +1,3 @@
-// frontend/src/components/auth/Register.js
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Container, Form, Button, Card } from 'react-bootstrap';
@@ -32,32 +30,53 @@ const Register = () => {
             toast.success("Registration successful! Please check your email to verify your account.");
             navigate('/login');
         } catch (err) {
-            toast.error(err.message.replace('Firebase: ', ''));
+            toast.error(err.message.replace('Firebase:', ''));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="bg-light min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="bg-light min-vh-100 d-flex align-items-center justify-content-center p-3">
             <Container>
-                <Card className="w-100 mx-auto shadow-lg border-0" style={{ maxWidth: "400px" }}>
-                    <Card.Body className="p-4">
-                        <h2 className="text-center mb-4 fw-bold">Create Account</h2>
+                <Card className="w-100 mx-auto shadow-lg border-0 rounded-3" style={{ maxWidth: "450px" }}>
+                    <Card.Body className="p-4 p-md-5">
+                        <h2 className="text-center mb-4 fw-bold h1">Create Account</h2>
                         <Form onSubmit={handleRegister}>
                             <Form.Group id="email" className="mb-3">
                                 <Form.Label>Email Address</Form.Label>
-                                <Form.Control type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter your email" />
+                                <Form.Control 
+                                    type="email" 
+                                    value={email} 
+                                    onChange={(e) => setEmail(e.target.value)} 
+                                    required 
+                                    placeholder="Enter your email"
+                                    size="lg"
+                                />
                             </Form.Group>
                             <Form.Group id="password" className="mb-3">
                                 <Form.Label>Password</Form.Label>
-                                <Form.Control type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Create a password" />
+                                <Form.Control 
+                                    type="password" 
+                                    value={password} 
+                                    onChange={(e) => setPassword(e.target.value)} 
+                                    required 
+                                    placeholder="Create a password (min. 6 characters)"
+                                    size="lg"
+                                />
                             </Form.Group>
                             <Form.Group id="confirm-password" className="mb-4">
                                 <Form.Label>Confirm Password</Form.Label>
-                                <Form.Control type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Confirm your password" />
+                                <Form.Control 
+                                    type="password" 
+                                    value={confirmPassword} 
+                                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                                    required 
+                                    placeholder="Confirm your password"
+                                    size="lg"
+                                />
                             </Form.Group>
-                            <Button disabled={loading} className="w-100" variant="primary" type="submit">
+                            <Button disabled={loading} className="w-100" variant="primary" type="submit" size="lg">
                                 {loading ? 'Creating Account...' : 'Sign Up'}
                             </Button>
                         </Form>
