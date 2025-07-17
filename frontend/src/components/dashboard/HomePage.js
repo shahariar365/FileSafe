@@ -15,7 +15,7 @@ const HomePage = () => {
     const [loading, setLoading] = useState(true);
     const [files, setFiles] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null);
-    const [fileName, setFileName] = useState(''); // ফাইলের কাস্টম নামের জন্য স্টেট
+    const [fileName, setFileName] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const navigate = useNavigate();
 
@@ -31,38 +31,17 @@ const HomePage = () => {
         return () => unsubscribe();
     }, [navigate]);
 
-useEffect(() => {
-    // যদি user অবজেক্ট না থাকে, তাহলে কিছুই করো না
-    if (!user) {
-        console.log("useEffect for files: No user found, returning.");
-        return;
-    }
-
-    console.log(`useEffect for files: Found user, creating query for userId: ${user.uid}`);
-
-    const q = query(collection(db, "files"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
-    
-    const unsubscribe = onSnapshot(q, 
-        (querySnapshot) => {
-            const userFiles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            console.log(`Firestore responded with ${userFiles.length} files.`);
-            console.log("Files data:", userFiles);
-            
-            setFiles(userFiles);
-        },
-        (error) => {
-            // যদি ডেটাবেস থেকে ডেটা আনতে কোনো এরর হয়
-            console.error("Error fetching files from Firestore: ", error);
-            toast.error("Could not load your files. Please try again.");
-        }
-    );
-
-    return () => {
-        console.log("Unsubscribing from Firestore listener.");
-        unsubscribe();
-    };
-}, [user]);
+    useEffect(() => {
+        if (!user) return;
+        const q = query(collection(db, "files"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setFiles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => {
+            console.error("Firestore error: ", error);
+            toast.error("Could not load files. Please check security rules and indexes.");
+        });
+        return () => unsubscribe();
+    }, [user]);
 
     const handleFileChange = (e) => {
         if (e.target.files[0]) {
@@ -86,12 +65,11 @@ useEffect(() => {
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
 
-            // Firestore-এ সঠিক তথ্যসহ ডেটা সেভ করা
             await addDoc(collection(db, "files"), {
-                userId: user.uid, // <--- নিশ্চিত করা হচ্ছে যে userId সেভ হচ্ছে
-                name: fileName || selectedFile.name, // <--- কাস্টম নাম অথবা আসল নাম
+                userId: user.uid,
+                name: fileName || selectedFile.name,
                 url: data.secure_url,
-                type: selectedFile.type, // <-- আসল ফাইলের টাইপ সেভ করা
+                type: selectedFile.type,
                 createdAt: new Date(),
             });
             toast.success('File uploaded successfully!');
@@ -100,14 +78,13 @@ useEffect(() => {
         } finally {
             setIsUploading(false);
             setSelectedFile(null);
-            setFileName(''); // কাস্টম নাম রিসেট করা
+            setFileName('');
             if(document.getElementById('file-input')) {
                 document.getElementById('file-input').value = null;
             }
         }
     };
     
-    // ... handleLogout এবং handleResendVerification ফাংশন আগের মতোই থাকবে ...
     const handleLogout = async () => {
         await signOut(auth);
         toast.info("You have been logged out.");
@@ -122,14 +99,24 @@ useEffect(() => {
         }
     };
 
-    // ... লোডিং এবং ইমেইল ভেরিফিকেশন স্ক্রিন আগের মতোই থাকবে ...
     if (loading) {
         return <div className="d-flex justify-content-center align-items-center min-vh-100"><Spinner animation="border" variant="primary" /></div>;
     }
+    
     if (user && !user.emailVerified) {
         return (
-            <Container className="d-flex flex-column justify-content-center align-items-center min-vh-100">
-                <Card className="text-center p-4 shadow-lg"><Card.Body><Card.Title as="h2" className="mb-3">Verify Your Email</Card.Title><Card.Text>A verification link was sent to <strong>{user.email}</strong>.</Card.Text><Card.Text>Please check your inbox to activate your account.</Card.Text><Button variant="primary" onClick={handleResendVerification} className="m-2">Resend Email</Button><Button variant="outline-danger" onClick={handleLogout} className="m-2">Logout</Button></Card.Body></Card>
+            <Container className="d-flex flex-column justify-content-center align-items-center min-vh-100 text-center">
+                <Card className="p-4 shadow-lg border-0" style={{ maxWidth: '500px' }}>
+                    <Card.Body>
+                        <Card.Title as="h2" className="mb-3">Verify Your Email</Card.Title>
+                        <Card.Text>A verification link was sent to <strong>{user.email}</strong>.</Card.Text>
+                        <Card.Text>Please check your inbox (and spam folder) to activate your account.</Card.Text>
+                        <div className="d-grid gap-2 d-sm-flex justify-content-sm-center mt-4">
+                            <Button variant="primary" onClick={handleResendVerification}>Resend Email</Button>
+                            <Button variant="outline-danger" onClick={handleLogout}>Logout</Button>
+                        </div>
+                    </Card.Body>
+                </Card>
             </Container>
         );
     }
@@ -151,38 +138,43 @@ useEffect(() => {
     };
 
     return (
-        <>
-            <Navbar bg="primary" variant="dark" expand="lg" sticky="top">
+        <div className="bg-light">
+            <Navbar bg="primary" variant="dark" expand="lg" sticky="top" className="shadow">
                 <Container>
-                    <Navbar.Brand href="#home" className="fw-bold">FileSafe</Navbar.Brand>
-                    <Nav className="ms-auto">
-                        {user && <Navbar.Text className="me-3 d-none d-lg-block">Signed in as: {user.email}</Navbar.Text>}
-                        <Button variant="outline-light" onClick={handleLogout}>Logout</Button>
-                    </Nav>
+                    <Navbar.Brand href="#home" className="fw-bold fs-4">FileSafe</Navbar.Brand>
+                    <Navbar.Toggle aria-controls="main-navbar-nav" />
+                    <Navbar.Collapse id="main-navbar-nav">
+                        <Nav className="ms-auto align-items-center">
+                            {user && <Navbar.Text className="me-lg-3 mb-2 mb-lg-0">Signed in as: <strong>{user.email}</strong></Navbar.Text>}
+                            <Button variant="outline-light" onClick={handleLogout}>Logout</Button>
+                        </Nav>
+                    </Navbar.Collapse>
                 </Container>
             </Navbar>
 
-            <Container className="my-5">
-                <Card className="p-4 mb-5 shadow-sm border-0">
+            <Container className="my-4 my-md-5">
+                <Card className="p-4 p-lg-5 mb-5 shadow-sm border-0 rounded-3">
                     <h2 className="mb-4">Upload New File</h2>
-                    {/* কাস্টম ফাইলের নাম দেওয়ার ইনপুট */}
                     <Form.Group className="mb-3">
                         <Form.Label>Custom File Name (Optional)</Form.Label>
-                        <Form.Control type="text" placeholder="e.g., My Report" value={fileName} onChange={(e) => setFileName(e.target.value)} />
+                        <Form.Control type="text" placeholder="e.g., My Semester Report" value={fileName} onChange={(e) => setFileName(e.target.value)} />
                     </Form.Group>
-                    {/* ফাইল সিলেক্ট করার ইনপুট */}
                     <Form.Group controlId="file-input" className="mb-3">
+                        <Form.Label>Select File</Form.Label>
                         <Form.Control type="file" onChange={handleFileChange} />
                     </Form.Group>
-                    {isUploading && <ProgressBar animated now={isUploading ? 100 : 0} className="mb-3" />}
-                    <Button onClick={handleUpload} disabled={!selectedFile || isUploading} size="lg">
-                        {isUploading ? 'Uploading...' : 'Upload File'}
-                    </Button>
+                    {isUploading && <ProgressBar animated now={100} className="mb-3" />}
+                    <div className="d-grid">
+                        <Button onClick={handleUpload} disabled={!selectedFile || isUploading} size="lg" variant="success">
+                            {isUploading ? 'Uploading...' : 'Upload File'}
+                        </Button>
+                    </div>
                 </Card>
 
                 <h2>Your Files</h2>
                 <hr />
-                <Row xs={1} md={2} lg={4} className="g-4">
+                {/* রেসপন্সিভ গ্রিড: ছোট স্ক্রিনে ১টি, মিডিয়ামে ২টি, লার্জে ৩টি এবং XL স্ক্রিনে ৪টি কার্ড */}
+                <Row xs={1} md={2} lg={3} xl={4} className="g-4">
                     {files.length > 0 ? files.map(file => (
                         <Col key={file.id}>
                             <Card className="h-100 shadow-sm border-0 card-hover">
@@ -198,13 +190,13 @@ useEffect(() => {
                             </Card>
                         </Col>
                     )) : (
-                        <Col>
+                        <Col xs={12}>
                             <Alert variant="info">You haven't uploaded any files yet. Use the form above to get started!</Alert>
                         </Col>
                     )}
                 </Row>
             </Container>
-        </>
+        </div>
     );
 };
 export default HomePage;
