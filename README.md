@@ -1,6 +1,8 @@
 # FileSafe
 FileSafe 📂✨
+
 A secure, modern, and responsive file storage web application built with the MERN stack principles, using React, Firebase, and Bootstrap. This project was developed as a part of the CSE412: Software Engineering course.
+
 ![alt text](https://api.netlify.com/api/v1/badges/YOUR_NETLIFY_SITE_ID/deploy-status)
 
 ![alt text](https://img.shields.io/badge/License-MIT-blue.svg)
